@@ -1,5 +1,8 @@
 #include <string>
 #include <iostream>
+#include <vector>
+#include <unistd.h>
+#include <sstream>
  using namespace std;
 
  int main(){
@@ -7,6 +10,15 @@
     cerr << unitbuf;
 string command;
   string builtin_commands[] = {"echo" , "type" , "exit"};
+
+  string path = getenv("PATH");
+  stringstream ss(path);
+  string dir;
+  vector <string>paths;
+  while(getline(ss , dir , ':')){
+   paths.push_back(dir);
+  }
+  
   while(true){
     cout << "$ ";
    
@@ -30,11 +42,22 @@ string command;
      }
     }
     if(!found){
-     cout << arg << " not found\n";
+     for(const string &dir : paths){
+      string full_path = dir + "/" + arg;
+      if(access(full_path.c_str() , X_OK) == 0){
+       cout << arg << " is " << full_path << "\n";
+          found = true;
+          break;
+      }
+     }
+    }
+    if(!found){
+     cout <<arg << ": not found\n";
     }
     continue;
    }
 
    cout << command << ": command not found" << "\n";
   }
+  return 0;
 }
