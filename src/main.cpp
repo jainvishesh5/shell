@@ -6,6 +6,7 @@
     cout << unitbuf;
     cerr << unitbuf;
 string command;
+  string builtin_commands[] = {"echo" , "type" , "exit"};
   while(true){
     cout << "$ ";
    
@@ -18,6 +19,21 @@ string command;
     cout << command.substr(5) << "\n";
     continue;
   }
+   if(command.rfind("type " , 0)==0){
+     string arg = command.substr(5);
+    bool found = false;
+    for(const string &cmd: builtin_commands){
+     if(arg == cmd){
+      cout << arg << " is a shell builtin\n";
+       found = true;
+      break;
+     }
+    }
+    if(!found){
+     cout << arg << " not found\n";
+    }
+    continue;
+   }
 
    cout << command << ": command not found" << "\n";
   }
