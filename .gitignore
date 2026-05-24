@@ -1,0 +1,27 @@
+# Build files
+*.o
+*.out
+*.exe
+*.a
+*.so
+
+# CMake
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Editor files
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Linux
+*.swp
+
+# Logs
+*.log
