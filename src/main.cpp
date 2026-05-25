@@ -24,11 +24,53 @@ string command;
     cout << "$ ";
    
     getline(cin , command);
-   stringstream cmd_stream(command);
-   string arg;
+   string arg = "";
    vector<string> args;
-   while(cmd_stream >> arg){
+   bool in_single_quotes = false;
+   bool in_double_quotes = false;
+
+   for(int i=0 ; i<command.size() ;i++){
+    if(command[i] == '\\' && !in_single_quotes){
+      if(i+1 < command.size()){
+     arg += command[i+1];
+     i++;
+     continue;
+    }
+  }
+    if(command[i] == '\'' && !in_double_quotes){
+      in_single_quotes = !in_single_quotes;
+     continue;
+    }
+    if(command[i] == '"' && !in_single_quotes){
+      in_double_quotes = !in_double_quotes;
+     continue;
+    }
+    if(in_single_quotes || in_double_quotes){
+     arg += command[i];
+     continue;
+    }
+    else{
+     if(command[i] == ' '){
+      if(!arg.empty()){
+     args.push_back(arg);
+      arg = "";
+    }
+     }
+    else{
+     arg += command[i];
+    }
+   }
+   }
+   if(!arg.empty()){
     args.push_back(arg);
+   }
+   if(in_single_quotes){
+    cerr << "Error: unmatched single quote\n";
+    continue;
+   }
+   if(in_double_quotes){
+    cerr << "Error: unmatched double quote\n";
+    continue;
    }
 
    vector <char*> argv;
