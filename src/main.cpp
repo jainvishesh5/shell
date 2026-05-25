@@ -3,6 +3,7 @@
 #include <vector>
 #include <unistd.h>
 #include <sstream>
+#include <sys/wait.h>
  using namespace std;
 
  int main(){
@@ -23,16 +24,37 @@ string command;
     cout << "$ ";
    
     getline(cin , command);
+   stringstream cmd_stream(command);
+   string arg;
+   vector<string> args;
+   while(cmd_stream >> arg){
+    args.push_back(arg);
+   }
+
+   vector <char*> argv;
+   for(string& arg:args){
+    argv.push_back(arg.data());
+   }
+   argv.push_back(nullptr);
+
+   if(args.empty())continue;
      
-    if(command == "exit"){
+    if(args[0] == "exit"){
     break;
   }
-    if(command.rfind("echo " , 0)==0){
-    cout << command.substr(5) << "\n";
+    if(args[0] == "echo"){
+    for(size_t i=1 ; i<args.size() ; i++){
+     cout << args[i] <<" ";
+    }
+     cout << "\n";
     continue;
   }
-   if(command.rfind("type " , 0)==0){
-     string arg = command.substr(5);
+   if(args[0] == "type"){
+    if(args.size() < 2){
+     cout <<"type missing arguments\n";
+     continue;
+    }
+     string arg = args[1];
     bool found = false;
     for(const string &cmd: builtin_commands){
      if(arg == cmd){
@@ -57,7 +79,15 @@ string command;
     continue;
    }
 
-   cout << command << ": command not found" << "\n";
+   pid_t pid = fork();
+   if(pid == 0){
+    execvp(argv[0] , argv.data());
+    cout << command << ": command not found\n";
+    exit(1);
+   }
+   else{
+    waitpid(pid , nullptr , 0);
+   }
   }
   return 0;
 }
