@@ -11,7 +11,7 @@
     cerr << unitbuf;
 string command;
   string builtin_commands[] = {"echo" , "type" , "exit"};
-
+  string home = getenv("HOME");
   string path = getenv("PATH");
   stringstream ss(path);
   string dir;
@@ -51,7 +51,7 @@ string command;
   }
    if(args[0] == "type"){
     if(args.size() < 2){
-     cout <<"type missing arguments\n";
+     cerr <<"type missing arguments\n";
      continue;
     }
      string arg = args[1];
@@ -79,10 +79,38 @@ string command;
     continue;
    }
 
+   if(args[0] == "pwd"){
+    char cwd[1024];
+    if(getcwd(cwd , sizeof(cwd)) == nullptr){
+     perror("pwd");
+     continue;
+    }
+    cout << cwd <<"\n";
+    continue;
+   }
+
+   if(args[0] == "cd"){
+    if(args.size() < 2){
+     cerr << "cd: missing argument\n";
+     continue;
+    }
+    if(args[1] == "~"){
+     if(chdir(home.c_str()) != 0){
+      perror("cd");
+     }
+     continue;
+    }
+    if(chdir(args[1].c_str())!=0){
+     string error_msg = "cd: "+ args[1];
+     perror(error_msg.c_str());
+    }
+    continue;
+   }
+
    pid_t pid = fork();
    if(pid == 0){
     execvp(argv[0] , argv.data());
-    cout << command << ": command not found\n";
+    cerr << command << ": command not found\n";
     exit(1);
    }
    else{
