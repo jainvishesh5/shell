@@ -10,7 +10,9 @@
     struct Redirection
     {
         bool redirect_stdout = false;
-        string output_file;
+        string stdout_file;
+        bool redirect_stderr = false;
+        string stderr_file;
     };
     
     const string builtin_commands[] = {"echo" , "type" , "exit" , "pwd" , "cd"};
@@ -93,16 +95,28 @@
             should_continue = false;
         }
         int saved_stdout;
+        int saved_stderr;
         if(redir.redirect_stdout){
             saved_stdout = dup(STDOUT_FILENO);
-            int fd = open(redir.output_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                if(fd < 0){
-                    perror("open");
-                    exit(1);
-                }
-                dup2(fd, STDOUT_FILENO);
-                close(fd);
+            int fd = open(redir.stdout_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if(fd < 0){
+                perror("open");
+                exit(1);
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
         }
+        if(redir.redirect_stderr){
+            saved_stderr = dup(STDERR_FILENO);
+            int fd = open(redir.stderr_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if(fd < 0){
+                perror("open");
+                exit(1);
+            }
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+        }
+
         if(args[0] == "echo"){
             for(size_t i=1 ; i<args.size() ; i++){
                 if(i != args.size()-1){
@@ -121,27 +135,29 @@
                 cerr <<"type missing arguments\n";
                 
             }
-            string arg = args[1];
-            bool found = false;
-            for(const string &cmd: builtin_commands){
-                if(arg == cmd){
-                    cout << arg << " is a shell builtin\n";
-                    found = true;
-                    break;
-                }
-            }
-            if(!found){ 
-                for(const string &dir : paths){
-                    string full_path = dir + "/" + arg;
-                    if(access(full_path.c_str() , X_OK) == 0){
-                        cout << arg << " is " << full_path << "\n";
+            else{
+                string arg = args[1];
+                bool found = false;
+                for(const string &cmd: builtin_commands){
+                    if(arg == cmd){
+                        cout << arg << " is a shell builtin\n";
                         found = true;
                         break;
                     }
                 }
-            }
-            if(!found){
-                cout <<arg << ": not found\n";
+                if(!found){ 
+                    for(const string &dir : paths){
+                        string full_path = dir + "/" + arg;
+                        if(access(full_path.c_str() , X_OK) == 0){
+                            cout << arg << " is " << full_path << "\n";
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if(!found){
+                    cout <<arg << ": not found\n";
+                }
             }
         }
 
@@ -173,6 +189,10 @@
             dup2(saved_stdout , STDOUT_FILENO);
             close(saved_stdout);
         }
+        if(redir.redirect_stderr){
+            dup2(saved_stderr , STDERR_FILENO);
+            close(saved_stderr);
+        }
         return should_continue;
     }
 
@@ -193,7 +213,7 @@
         }
         if(pid == 0){
             if(redir.redirect_stdout){
-                int fd = open(redir.output_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                int fd = open(redir.stdout_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
                 if(fd < 0){
                     perror("open");
                     exit(1);
@@ -201,6 +221,16 @@
                 dup2(fd, STDOUT_FILENO);
                 close(fd);
             }
+            if(redir.redirect_stderr){
+                int fd = open(redir.stderr_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if(fd < 0){
+                    perror("open");
+                    exit(1);
+                }
+                dup2(fd, STDERR_FILENO);
+                close(fd);
+            }
+            
             execvp(argv[0] , argv.data());
             cerr << argv[0] << ": command not found\n";
             exit(1);
@@ -219,7 +249,17 @@
                     break;
                 }
                 redir.redirect_stdout = true;
-                redir.output_file = args[i+1];
+                redir.stdout_file = args[i+1];
+                args.resize(i);
+                break;
+            }
+            if(args[i] == "2>"){
+                if(i+1 >= args.size()){
+                    cerr << "no output file\n";
+                    break;
+                }
+                redir.redirect_stderr = true;
+                redir.stderr_file = args[i+1];
                 args.resize(i);
                 break;
             }
