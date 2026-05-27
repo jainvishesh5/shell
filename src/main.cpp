@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <dirent.h>
+#include <algorithm>
+#include <set>
 
     using namespace std;
 
@@ -307,45 +309,50 @@
         }
         return redir;
     }
-    bool complete_builtin(string &command){
+    
+    vector<string> get_builtin_matches(const string &command){
+        vector<string> matches;
         for(const string &builtin : builtin_commands){
-            if(command != builtin + " " && builtin.find(command) == 0){
-                command = builtin + " ";
-                return true;
+            if(builtin.find(command) == 0){
+                matches.push_back(builtin);
             }
         }
-        return false;
+        return matches;
     }
-    bool complete_external(string &command , const vector<string>&paths){
-        for(const string&dir : paths){
+    vector<string> get_external_matches(const vector<string>&paths , const string &command){
+        vector<string> matches;
+        for(const string &dir : paths){
             DIR* dp = opendir(dir.c_str());
-            if(dp == nullptr){
-                continue;
-            }
-            dirent* entry;
-            while((entry = readdir(dp)) != nullptr){
+            if(dp == nullptr)continue;
+            dirent*entry;
+            while((entry =readdir(dp) ) != nullptr){
                 string name = entry->d_name;
                 if(name.find(command) == 0){
                     string full_path = dir + "/" + name;
                     if(access(full_path.c_str() , X_OK) == 0){
-                        command = name + " ";
-                        closedir(dp);
-                        return true;
+                        matches.push_back(name);
                     }
                 }
             }
             closedir(dp);
         }
-        return false;
+        return matches;
     }
-    bool autocomplete_command(string &command , const vector<string>&paths){
-        
-        if(complete_builtin(command))return true;
-        return complete_external(command , paths);
-        
-    }
-    
 
+    vector<string> get_matches(const vector<string>&paths , const string &command){
+        set<string> unique_matches;
+        vector<string> builtin_matches = get_builtin_matches(command);
+        vector<string> external_matches = get_external_matches(paths , command);
+        for(const string &match :builtin_matches){
+            unique_matches.insert(match);
+        }
+        for(const string &match : external_matches){
+            unique_matches.insert(match);
+        }
+        vector<string>matches(unique_matches.begin() , unique_matches.end());
+        return matches;
+        
+    }
     int main(){
         cout << unitbuf;
         cerr << unitbuf;
@@ -378,16 +385,26 @@
                 }
                 
                 else if(c == '\t'){
+                    vector<string> matches = get_matches(paths,command);
+                    if(prev_char == '\t'){
+                        cout << "\n" ;
+                        for(const string & match : matches){
+                            cout << match << " ";
+                        }
                     
-                    if(autocomplete_command(command , paths)){
-                        cout << "\r$ " << command;
+                        cout << "\n$ " << command;
+                        prev_char = '\0';
                     }
                     else{
-                        if(prev_char == '\t'){
-                            
+                        if(matches.size() == 0){
+                            cout << '\a';
+                        }
+                        else if(matches.size() == 1){
+                            command = matches[0] + " ";
+                            cout <<"\r$ " << command;
                         }
                         else{
-                         cout << '\a';
+                            cout << '\a';
                         }
                     }
                 }
