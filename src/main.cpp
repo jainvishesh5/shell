@@ -13,6 +13,8 @@
         string stdout_file;
         bool redirect_stderr = false;
         string stderr_file;
+        bool append_stdout = false;
+        bool append_stderr = false;
     };
     
     const string builtin_commands[] = {"echo" , "type" , "exit" , "pwd" , "cd"};
@@ -26,6 +28,16 @@
             paths.push_back(dir);
         }
         return paths;
+    }
+    int get_flags(const bool append){
+        int flags = O_WRONLY | O_CREAT;
+        if(append){
+            flags |= O_APPEND;
+        }
+        else{
+            flags |= O_TRUNC;
+        }    
+        return flags;
     }
     
     vector<string> tokenize(const string &command){
@@ -97,8 +109,9 @@
         int saved_stdout;
         int saved_stderr;
         if(redir.redirect_stdout){
+            int flags = get_flags(redir.append_stdout);
             saved_stdout = dup(STDOUT_FILENO);
-            int fd = open(redir.stdout_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            int fd = open(redir.stdout_file.c_str() ,flags, 0644);
             if(fd < 0){
                 perror("open");
                 exit(1);
@@ -107,8 +120,9 @@
             close(fd);
         }
         if(redir.redirect_stderr){
+            int flags = get_flags(redir.append_stderr);
             saved_stderr = dup(STDERR_FILENO);
-            int fd = open(redir.stderr_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            int fd = open(redir.stderr_file.c_str() ,flags, 0644);
             if(fd < 0){
                 perror("open");
                 exit(1);
@@ -205,7 +219,7 @@
         return argv;
     }
 
-    void run_external(vector <char*> &argv , Redirection &redir){
+    void run_external(vector <char*> &argv , const Redirection &redir){
         pid_t pid = fork();
         if(pid < 0){
             perror("fork");
@@ -213,7 +227,8 @@
         }
         if(pid == 0){
             if(redir.redirect_stdout){
-                int fd = open(redir.stdout_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                int flags = get_flags(redir.append_stdout);
+                int fd = open(redir.stdout_file.c_str() ,flags, 0644);
                 if(fd < 0){
                     perror("open");
                     exit(1);
@@ -222,7 +237,8 @@
                 close(fd);
             }
             if(redir.redirect_stderr){
-                int fd = open(redir.stderr_file.c_str() , O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                int flags = get_flags(redir.append_stderr);
+                int fd = open(redir.stderr_file.c_str() ,flags, 0644);
                 if(fd < 0){
                     perror("open");
                     exit(1);
@@ -260,6 +276,28 @@
                 }
                 redir.redirect_stderr = true;
                 redir.stderr_file = args[i+1];
+                args.resize(i);
+                break;
+            }
+            if(args[i] == ">>" || args[i] == "1>>"){
+                if(i+1 >= args.size()){
+                    cerr << "no output file\n";
+                    break;
+                }
+                redir.redirect_stdout = true;
+                redir.stdout_file = args[i+1];
+                redir.append_stdout = true;
+                args.resize(i);
+                break;
+            }
+            if(args[i] == "2>>"){
+                if(i+1 >= args.size()){
+                    cerr << "no output file\n";
+                    break;
+                }
+                redir.redirect_stderr = true;
+                redir.stderr_file = args[i+1];
+                redir.append_stderr = true;
                 args.resize(i);
                 break;
             }
