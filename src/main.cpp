@@ -218,7 +218,7 @@
     vector <char*> build_argv(const vector<string> &args){
         vector <char*> argv;
         for(const string &arg:args){
-            argv.push_back((char*)arg.data());
+            argv.push_back(const_cast<char*>(arg.c_str()));
         }
         argv.push_back(nullptr);
         return argv;
@@ -272,7 +272,7 @@
                 redir.redirect_stdout = true;
                 redir.stdout_file = args[i+1];
                 args.resize(i);
-                break;
+                continue;
             }
             if(args[i] == "2>"){
                 if(i+1 >= args.size()){
@@ -282,7 +282,7 @@
                 redir.redirect_stderr = true;
                 redir.stderr_file = args[i+1];
                 args.resize(i);
-                break;
+                continue;
             }
             if(args[i] == ">>" || args[i] == "1>>"){
                 if(i+1 >= args.size()){
@@ -293,7 +293,7 @@
                 redir.stdout_file = args[i+1];
                 redir.append_stdout = true;
                 args.resize(i);
-                break;
+                continue;;
             }
             if(args[i] == "2>>"){
                 if(i+1 >= args.size()){
@@ -304,7 +304,7 @@
                 redir.stderr_file = args[i+1];
                 redir.append_stderr = true;
                 args.resize(i);
-                break;
+                continue;
             }
         }
         return redir;
@@ -353,6 +353,20 @@
         return matches;
         
     }
+    string longest_common_prefix(const vector<string> &matches){
+
+        if(matches.empty())return "";
+        string first_str = matches.front();
+        string last_str = matches.back();
+
+        size_t len = min(first_str.size() , last_str.size());
+        size_t i=0;
+        for(i=0 ; i<len ; i++){
+             if(first_str[i]!=last_str[i])break;
+        }
+        return first_str.substr(0,i);
+    }
+
     int main(){
         cout << unitbuf;
         cerr << unitbuf;
@@ -404,7 +418,14 @@
                             cout <<"\r$ " << command;
                         }
                         else{
-                            cout << '\a';
+                            string prefix = longest_common_prefix(matches);
+                            if(prefix.size() > command.size()){
+                                command = prefix;
+                                cout<< "\r$ " << command;
+                            }
+                            else{
+                                cout << '\a';
+                            }
                         }
                     }
                 }
