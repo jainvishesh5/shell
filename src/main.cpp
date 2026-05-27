@@ -5,6 +5,9 @@
 #include <sstream>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <termios.h>
+#include <dirent.h>
+
     using namespace std;
 
     struct Redirection
@@ -304,6 +307,43 @@
         }
         return redir;
     }
+    bool complete_builtin(string &command){
+        for(const string &builtin : builtin_commands){
+            if(command != builtin + " " && builtin.find(command) == 0){
+                command = builtin + " ";
+                return true;
+            }
+        }
+        return false;
+    }
+    bool complete_external(string &command , const vector<string>&paths){
+        for(const string&dir : paths){
+            DIR* dp = opendir(dir.c_str());
+            if(dp == nullptr){
+                continue;
+            }
+            dirent* entry;
+            while((entry = readdir(dp)) != nullptr){
+                string name = entry->d_name;
+                if(name.find(command) == 0){
+                    string full_path = dir + "/" + name;
+                    if(access(full_path.c_str() , X_OK) == 0){
+                        command = name + " ";
+                        closedir(dp);
+                        return true;
+                    }
+                }
+            }
+            closedir(dp);
+        }
+        return false;
+    }
+    bool autocomplete_command(string &command , const vector<string>&paths){
+        
+        if(complete_builtin(command))return true;
+        return complete_external(command , paths);
+        
+    }
     
 
     int main(){
@@ -312,28 +352,80 @@
         
         string command;
         vector<string> paths = getpaths();
+
+        termios original;
+        tcgetattr(STDIN_FILENO , &original);
+        termios raw = original;
+        raw.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO , TCSAFLUSH , &raw);
+
   
         while(true){
             cout << "$ ";
-            getline(cin , command);
-            
-            vector<string> args = tokenize(command);
-            
-            if(args.empty()){
-                continue;
-            }
-
-            Redirection redir = parse_redirection(args);
-
-            if(is_builtin(args[0])){
-                if(!run_builtin(args , paths ,redir)){
+            command.clear();
+            char c;
+            char prev_char = '\0';
+            bool should_exit = false;
+            while(true){
+                ssize_t bytes = read(STDIN_FILENO , &c , 1);
+                if(bytes <= 0){
+                    should_exit = true;
                     break;
-                }   
-                continue;
+                }
+                if(c == '\n'){
+                    cout << '\n';
+                    break;
+                }
+                
+                else if(c == '\t'){
+                    
+                    if(autocomplete_command(command , paths)){
+                        cout << "\r$ " << command;
+                    }
+                    else{
+                        if(prev_char == '\t'){
+                            
+                        }
+                        else{
+                         cout << '\a';
+                        }
+                    }
+                }
+                    
+                    
+                else if(c == 127){
+                    if(!command.empty()){
+                        command.pop_back();
+                        cout << "\b \b";
+                    }
+                }
+                else{
+                    command += c;
+                    cout << c;
+                }
+                prev_char = c;
             }
-
-            vector <char*> argv = build_argv(args);
-            run_external(argv,redir);
+                if(should_exit)break;
+                
+                
+                vector<string> args = tokenize(command);
+                
+                if(args.empty()){
+                    continue;
+                }
+                
+                Redirection redir = parse_redirection(args);
+                
+                if(is_builtin(args[0])){
+                    if(!run_builtin(args , paths ,redir)){
+                        break;
+                    }   
+                    continue;
+                }
+                
+                vector <char*> argv = build_argv(args);
+                run_external(argv,redir);
         }
-        return 0;
+            tcsetattr(STDIN_FILENO , TCSAFLUSH , &original);
+            return 0;
     }
