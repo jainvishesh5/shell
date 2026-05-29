@@ -78,6 +78,13 @@
                         arg = "";
                     }
                 }
+                else if(command[i] == '|'){
+                    if(!arg.empty()){
+                        args.push_back(arg);
+                        arg = "";
+                    }
+                    args.push_back("|");
+                }
                 else{
                     arg += command[i];
                 }
@@ -367,6 +374,97 @@
         return first_str.substr(0,i);
     }
 
+    vector<vector<string>> split_args(const vector<string>&args){
+        vector<vector<string>>args_split(1);
+        vector <string>* insert_vector = &args_split[0];
+        for(const string &arg : args){
+            if(arg == "|"){
+                args_split.push_back({});
+                insert_vector = &args_split.back();
+                continue;
+            }
+            insert_vector->push_back(arg);
+        }
+        return args_split;
+    }
+
+    void run_pipeline(const vector<string>&args , const vector<string>&paths){
+        Redirection dummy;
+        vector<vector<string>>cmds = split_args(args);
+        for(const auto& cmd : cmds){
+            if(cmd.empty()){
+                cerr<< "missing argument\n";
+                return;
+            }
+        }
+        int num_cmds = cmds.size();
+        vector<int>pipes(2*(num_cmds-1));
+        for(int i=0 ; i< num_cmds-1 ; i++){
+            if(pipe(&pipes[2*i])<0){
+                perror("pipe");
+                return;
+            }
+        }        
+        vector<pid_t>pids;
+
+        for(int i=0;i<num_cmds ; i++){
+            pid_t pid = fork();
+            if(pid<0){
+                for(int fd:pipes){
+                    close(fd);
+                }     
+                perror("fork");
+                return;
+            }
+            else if(pid == 0){
+                vector<char*> argv = build_argv(cmds[i]);
+                if(i==0){
+                    if(dup2(pipes[2*i +1] , STDOUT_FILENO)<0){
+                        perror("dup2");
+                        exit(1);
+                    }
+                }
+                else if(i == num_cmds-1){
+                    if(dup2(pipes[2*(i-1)] , STDIN_FILENO)<0){
+                        perror("dup2");
+                        exit(1);
+                    }
+                }
+                else{
+                    if(dup2(pipes[2*(i-1)], STDIN_FILENO)<0){
+                        perror("dup2");
+                        exit(1);
+                    }
+                    if(dup2(pipes[2*i +1], STDOUT_FILENO)<0){
+                        perror("dup2");
+                        exit(1);
+                    }
+                }
+                for(int fd:pipes){
+                    close(fd);
+                }            
+                if (is_builtin(cmds[i][0]))
+                {
+                    run_builtin(cmds[i] , paths ,dummy);
+                    exit(0);
+                }
+                    
+                execvp(argv[0] , argv.data());
+                perror("execvp");
+                exit(1);
+            }
+            else{
+                pids.push_back(pid);
+            }
+        }
+        for(int fd:pipes){
+            close(fd);
+        }   
+        for(pid_t pid:pids){
+            waitpid(pid , nullptr ,0);
+        }
+    }
+
     int main(){
         cout << unitbuf;
         cerr << unitbuf;
@@ -408,6 +506,7 @@
                     
                         cout << "\n$ " << command;
                         prev_char = '\0';
+                        continue;
                     }
                     else{
                         if(matches.size() == 0){
@@ -451,7 +550,18 @@
                 if(args.empty()){
                     continue;
                 }
-                
+                bool has_pipeline = false;
+
+                for(const string &arg:args){
+                    if(arg =="|"){
+                        has_pipeline = true;
+                        break;
+                    }
+                }
+                if(has_pipeline){
+                    run_pipeline(args , paths);
+                    continue;
+                }
                 Redirection redir = parse_redirection(args);
                 
                 if(is_builtin(args[0])){
